@@ -2,21 +2,18 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 
-# Request inputs
-# ticker = input("Input ticker: ")
-# years = int(input("Input no. of years: "))
-# initial_capital = float(input("Input initial capital: "))
+# Inputs
 ticker = "BTC-USD"
 years = 10
 initial_capital = 10000
 
-# Dati
+# Download data
 df = yf.download(ticker, period=f"{years}y")
 
 if isinstance(df.columns, pd.MultiIndex):
     df.columns = df.columns.get_level_values(0)
 
-# Strategia
+# Strategy
 df["SMA50"] = df["Close"].rolling(50).mean()
 df["SMA200"] = df["Close"].rolling(200).mean()
 
@@ -29,12 +26,12 @@ df["Trade_Price"] = df["Close"].shift(-1).where(df["Trade"] != "")
 
 df_full = df.copy()
 
-# Rimuovere righe senza trade e rimuovere primo sell
+# Remove rows without trades and remove first "SELL"
 df = df[df["Trade"] != ""]
 if not df.empty and df.iloc[0]["Trade"] == "SELL":
     df = df.iloc[1:]
 
-# Costruzione trade reali
+# Build trades dataframe
 trades = []
 
 entry_price = None
@@ -66,9 +63,9 @@ for i in range(len(df)):
         entry_price = None
         entry_date = None
 
-# Se l'ultima posizione è ancora aperta (BUY senza SELL), chiudi a oggi
+# If the last position is still open (BUY without SELL), close it today
 if entry_price is not None:
-    # Prendi l'ultimo prezzo disponibile nel dataset originale
+    # Take the last price available from the original dataset
     exit_price = df["Close"].iloc[-1]
     exit_date = df.index[-1]
     ret = (exit_price - entry_price) / entry_price
@@ -97,8 +94,8 @@ win_rate = (trades_df["Return"] > 0).mean()
 strategy_returns = trades_df["Return"]
 strategy_sharpe = strategy_returns.mean() / strategy_returns.std() * np.sqrt(len(strategy_returns))
 
-# Confrontare con buy&hold
-    # Rendimento giornaliero
+# Compare with buy&hold
+    # Daily return
 df["Return"] = df["Close"].pct_change()
     # Equity
 df["BH_Equity"] = initial_capital * (1 + df["Return"]).cumprod()
@@ -106,21 +103,21 @@ df["BH_Equity"] = initial_capital * (1 + df["Return"]).cumprod()
 bh_returns = df["Return"].dropna()
 bh_sharpe = bh_returns.mean() / bh_returns.std() * np.sqrt(252)
 
-# Metriche
-#print("Max Drawdown:", round(max_drawdown * 100, 2), "%")
-#print("Win Rate:", round(win_rate * 100, 2), "%")
+# Metrics
+print("Max Drawdown:", round(max_drawdown * 100, 2), "%")
+print("Win Rate:", round(win_rate * 100, 2), "%")
 print("Strategy Sharpe:", round(strategy_sharpe, 2))
 print("Buy & Hold Sharpe:", round(bh_sharpe, 2))
 
-# Esportazione
-# trades_df.to_excel('/Users/Carlo/Desktop/Trades.xlsx', index=False)
+# Export
+trades_df.to_excel('/Users/Carlo/Desktop/Trades.xlsx', index=False)
 
-# Grafico delle equity curve
-# plt.figure()
-    # Equity della strategy
-# plt.plot(trades_df["Exit Date"], trades_df["Equity"], label="Strategy")
-    # Equity di b&h
-# plt.plot(df.index, df["BH_Equity"], label="Buy & Hold")
-# plt.legend()
-# plt.title("Equity Curve Comparison")
-# plt.show()
+# Equity curves chart
+plt.figure()
+    # Straetgy Equity
+plt.plot(trades_df["Exit Date"], trades_df["Equity"], label="Strategy")
+    # B&h Equity
+plt.plot(df.index, df["BH_Equity"], label="Buy & Hold")
+plt.legend()
+plt.title("Equity Curve Comparison")
+plt.show()
