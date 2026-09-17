@@ -1,6 +1,7 @@
 import yfinance as yf
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
 
 # Inputs
 ticker = "BTC-USD"
@@ -23,13 +24,21 @@ df["Prev_Signal"] = df["Signal"].shift(1)
 df["Trade"] = np.where(df["Signal"] != df["Prev_Signal"], df["Signal"], "")
 
 df["Trade_Price"] = df["Close"].shift(-1).where(df["Trade"] != "")
+df["Trade_Date"] = df.index.to_series().shift(-1).where(df["Trade"] != "")
 
-df_full = df.copy()
+df["Market_Return"] = df["Close"].pct_change()
+df["Position"] = np.where(df["SMA50"] > df["SMA200"], 1, 0)
 
-# Remove rows without trades and remove first "SELL"
-df = df[df["Trade"] != ""]
-if not df.empty and df.iloc[0]["Trade"] == "SELL":
-    df = df.iloc[1:]
+df["Strategy_Return"] = df["Position"].shift(1) * df["Market_Return"]
+
+df["Strategy_Equity"] = (initial_capital * (1 + df["Strategy_Return"].fillna(0)).cumprod())
+
+# Keep full daily dataset and create a separate dataframe for trade signals
+df_trades = df[df["Trade"] != ""].copy()
+
+# Remove initial SELL signal if present
+if not df_trades.empty and df_trades.iloc[0]["Trade"] == "SELL":
+    df_trades = df_trades.iloc[1:]
 
 # Build trades dataframe
 trades = []
@@ -37,10 +46,10 @@ trades = []
 entry_price = None
 entry_date = None
 
-for i in range(len(df)):
-    trade = df["Trade"].iloc[i]
-    price = df["Trade_Price"].iloc[i]
-    date = df.index[i]
+for i in range(len(df_trades)):
+    trade = df_trades["Trade"].iloc[i]
+    price = df_trades["Trade_Price"].iloc[i]
+    date = df_trades["Trade_Date"].iloc[i]
 
     if trade == "BUY":
         entry_price = price
@@ -65,7 +74,6 @@ for i in range(len(df)):
 
 # If the last position is still open (BUY without SELL), close it today
 if entry_price is not None:
-    # Take the last price available from the original dataset
     exit_price = df["Close"].iloc[-1]
     exit_date = df.index[-1]
     ret = (exit_price - entry_price) / entry_price
@@ -91,16 +99,16 @@ max_drawdown = trades_df["Drawdown"].min()
 # Win rate
 win_rate = (trades_df["Return"] > 0).mean()
 # Sharpe ratio
-strategy_returns = trades_df["Return"]
-strategy_sharpe = strategy_returns.mean() / strategy_returns.std() * np.sqrt(len(strategy_returns))
+strategy_returns = df["Strategy_Return"].dropna()
+strategy_sharpe = (strategy_returns.mean() / strategy_returns.std() * np.sqrt(252))
 
 # Compare with buy&hold
-    # Daily return
-df["Return"] = df["Close"].pct_change()
-    # Equity
-df["BH_Equity"] = initial_capital * (1 + df["Return"]).cumprod()
-    # Sharpe ratio
-bh_returns = df["Return"].dropna()
+    # Buy & Hold daily returns
+df["Daily_Return"] = df["Close"].pct_change()
+    # Buy & Hold equity curve
+df["BH_Equity"] = initial_capital * (1 + df["Daily_Return"]).cumprod()
+    # Buy & Hold Sharpe ratio
+bh_returns = df["Daily_Return"].dropna()
 bh_sharpe = bh_returns.mean() / bh_returns.std() * np.sqrt(252)
 
 # Metrics
@@ -114,8 +122,8 @@ trades_df.to_excel('/Users/Carlo/Desktop/Trades.xlsx', index=False)
 
 # Equity curves chart
 plt.figure()
-    # Straetgy Equity
-plt.plot(trades_df["Exit Date"], trades_df["Equity"], label="Strategy")
+    # Strategy Equity
+plt.plot(df.index, df["Strategy_Equity"], label="Strategy")
     # B&h Equity
 plt.plot(df.index, df["BH_Equity"], label="Buy & Hold")
 plt.legend()
