@@ -1,6 +1,6 @@
 # SMA 50/200 Crossover Backtester
 
-Systematic backtesting of a Golden Cross / Death Cross strategy across 6 asset classes and 7 historical periods (56 combinations total).
+Systematic backtesting of a Golden Cross / Death Cross strategy across 6 asset classes and 7 historical periods (42 combinations total).
 
 ## Strategy
 Buy when the 50-day SMA crosses above the 200-day SMA (Golden Cross). Sell when it crosses below (Death Cross). Starting capital: $10,000.
